@@ -1,0 +1,652 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum AdministrativeRole {
+  USER
+  ADMIN
+  SUPER_ADMIN
+}
+
+enum ContentType {
+  MOVIE
+  TV_SERIES
+  WEB_SERIES
+  ANIME
+  DOCUMENTARY
+  SHORT_FILM
+  SHORT
+}
+
+enum ContentStatus {
+  DRAFT
+  PUBLISHED
+  ARCHIVED
+}
+
+enum ContentAccess {
+  FREE
+  PREMIUM
+}
+
+enum SubscriptionStatus {
+  PENDING
+  ACTIVE
+  CANCELLED
+  EXPIRED
+  REVOKED
+}
+
+enum PaymentStatus {
+  PENDING
+  VERIFIED
+  FAILED
+  REFUNDED
+}
+
+enum AssetKind {
+  POSTER
+  BACKDROP
+  ORIGINAL
+  HLS
+  THUMBNAIL
+}
+
+model User {
+  id            String             @id
+  name          String
+  email         String             @unique
+  emailVerified Boolean            @default(false)
+  image         String?
+  role          AdministrativeRole @default(USER)
+  suspendedAt   DateTime? @db.Timestamptz(3)
+  createdAt     DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime           @updatedAt @db.Timestamptz(3)
+  accounts      Account[]
+  sessions      Session[]
+  profile       UserProfile?
+  preferences   UserPreference?
+  watchlist     Watchlist?
+  history       WatchHistory[]
+  progress      WatchProgress[]
+  ratings       UserRating[]
+  subscriptions Subscription[]
+  payments      Payment[]
+  notifications Notification[]
+  redemptions   CouponRedemption[]
+  auditLogs     AuditLog[]
+}
+
+model Account {
+  id                    String    @id
+  accountId             String
+  providerId            String
+  userId                String
+  accessToken           String?
+  refreshToken          String?
+  idToken               String?
+  accessTokenExpiresAt  DateTime? @db.Timestamptz(3)
+  refreshTokenExpiresAt DateTime? @db.Timestamptz(3)
+  scope                 String?
+  password              String?
+  createdAt             DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt             DateTime  @updatedAt @db.Timestamptz(3)
+  user                  User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+}
+
+model Session {
+  id        String   @id
+  token     String   @unique
+  userId    String
+  expiresAt DateTime @db.Timestamptz(3)
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  playbackSessions PlaybackSession[]
+
+  @@index([userId, expiresAt])
+}
+
+// Better Auth verification records cover email verification and password reset.
+model Verification {
+  id         String   @id
+  identifier String
+  value      String
+  expiresAt  DateTime @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+
+  @@index([identifier])
+  @@map("VerificationToken")
+}
+
+model UserProfile {
+  userId    String   @id
+  bio       String   @default("")
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model UserPreference {
+  userId           String   @id
+  subtitleLanguage String   @default("English")
+  createdAt        DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt        DateTime @updatedAt @db.Timestamptz(3)
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model RolePermission {
+  id         String             @id @default(cuid())
+  role       AdministrativeRole
+  permission String
+  createdAt  DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime           @updatedAt @db.Timestamptz(3)
+
+  @@unique([role, permission])
+}
+
+model ApiRateLimit {
+  key     String   @id
+  count   Int
+  resetAt DateTime @db.Timestamptz(3)
+}
+
+// Common movie/series fields stay in one table; type + seasons avoid duplicate tables.
+model Content {
+  id              String                @id @default(cuid())
+  slug            String                @unique
+  title           String
+  tagline         String                @default("")
+  ageRating       String                @default("Not rated")
+  production      String                @default("")
+  featured        Boolean               @default(false)
+  description     String
+  type            ContentType
+  status          ContentStatus         @default(DRAFT)
+  access          ContentAccess         @default(FREE)
+  releaseYear     Int
+  duration        Int
+  editorialRating Float                 @default(0)
+  popularity      Int                   @default(0)
+  posterPath      String
+  backdropPath    String?
+  accentColor     String                @default("#b8c4d2")
+  isDemo          Boolean               @default(false)
+  publishedAt     DateTime? @db.Timestamptz(3)
+  availableFrom   DateTime? @db.Timestamptz(3)
+  availableUntil  DateTime? @db.Timestamptz(3)
+  allowedRegions  String[]              @default([])
+  createdAt       DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt       DateTime              @updatedAt @db.Timestamptz(3)
+  genres          ContentGenre[]
+  categories      ContentCategory[]
+  cast            ContentCast[]
+  crew            ContentCrew[]
+  languages       ContentLanguage[]
+  seasons         Season[]
+  assets          ContentAsset[]
+  subtitles       Subtitle[]
+  banners         ContentBanner[]
+  watchlistItems  WatchlistItem[]
+  history         WatchHistory[]
+  progress        WatchProgress[]
+  ratings         UserRating[]
+  sectionItems    HomepageSectionItem[]
+  videoJobs       VideoJob[]
+
+  @@index([status, type, popularity])
+  @@index([status, access, publishedAt])
+}
+
+model Season {
+  id        String    @id @default(cuid())
+  contentId String
+  number    Int
+  title     String?
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  content   Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  episodes  Episode[]
+
+  @@unique([contentId, number])
+}
+
+model Episode {
+  id            String         @id @default(cuid())
+  seasonId      String
+  number        Int
+  title         String
+  description   String
+  duration      Int
+  language      String         @default("English")
+  access        ContentAccess  @default(FREE)
+  thumbnailPath String
+  status        ContentStatus  @default(DRAFT)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  season        Season         @relation(fields: [seasonId], references: [id], onDelete: Cascade)
+  assets        ContentAsset[]
+  subtitles     Subtitle[]
+  videoJobs     VideoJob[]
+  progress      WatchProgress[]
+  history       WatchHistory[]
+
+  @@unique([seasonId, number])
+}
+
+model Genre {
+  id        String         @id @default(cuid())
+  slug      String         @unique
+  name      String         @unique
+  position  Int            @default(0)
+  active    Boolean        @default(true)
+  createdAt DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime       @updatedAt @db.Timestamptz(3)
+  contents  ContentGenre[]
+}
+
+model Category {
+  id        String            @id @default(cuid())
+  slug      String            @unique
+  name      String
+  position  Int               @default(0)
+  active    Boolean           @default(true)
+  createdAt DateTime          @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime          @updatedAt @db.Timestamptz(3)
+  contents  ContentCategory[]
+}
+
+model ContentGenre {
+  contentId String
+  genreId   String
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  genre     Genre   @relation(fields: [genreId], references: [id], onDelete: Cascade)
+
+  @@id([contentId, genreId])
+  @@index([genreId, contentId])
+}
+
+model ContentCategory {
+  contentId  String
+  categoryId String
+  content    Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  category   Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([contentId, categoryId])
+  @@index([categoryId, contentId])
+}
+
+// A single person may be cast and crew; do not duplicate their identity.
+model Person {
+  id        String        @id @default(cuid())
+  name      String
+  createdAt DateTime      @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime      @updatedAt @db.Timestamptz(3)
+  cast      ContentCast[]
+  crew      ContentCrew[]
+}
+
+model ContentCast {
+  contentId String
+  personId  String
+  character String?
+  position  Int     @default(0)
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  person    Person  @relation(fields: [personId], references: [id], onDelete: Restrict)
+
+  @@id([contentId, personId])
+}
+
+model ContentCrew {
+  contentId String
+  personId  String
+  job       String
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  person    Person  @relation(fields: [personId], references: [id], onDelete: Restrict)
+
+  @@id([contentId, personId, job])
+}
+
+model ContentLanguage {
+  contentId String
+  language  String
+  content   Content @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@id([contentId, language])
+}
+
+model Subtitle {
+  id                String   @id @default(cuid())
+  contentId         String
+  episodeId         String?
+  language          String
+  privateStorageKey String?
+  createdAt         DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime @updatedAt @db.Timestamptz(3)
+  content           Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  episode           Episode? @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([contentId, episodeId])
+}
+
+model ContentAsset {
+  id                String    @id @default(cuid())
+  contentId         String
+  episodeId         String?
+  kind              AssetKind
+  privateStorageKey String
+  ready             Boolean   @default(false)
+  videoJobId        String?   @unique
+  videoJob          VideoJob? @relation(fields:[videoJobId],references:[id],onDelete:Restrict)
+  playbackSessions  PlaybackSession[]
+  createdAt         DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @db.Timestamptz(3)
+  content           Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+  episode           Episode?  @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([contentId, episodeId, kind])
+}
+
+model ContentBanner {
+  id        String   @id @default(cuid())
+  contentId String
+  imagePath String
+  title     String   @default("")
+  description String @default("")
+  watchPath String   @default("")
+  infoPath  String   @default("")
+  position  Int      @default(0)
+  active    Boolean  @default(false)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  content   Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+}
+
+model Watchlist {
+  id        String          @id @default(cuid())
+  userId    String          @unique
+  createdAt DateTime        @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime        @updatedAt @db.Timestamptz(3)
+  user      User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  items     WatchlistItem[]
+}
+
+model WatchlistItem {
+  watchlistId String
+  contentId   String
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+  watchlist   Watchlist @relation(fields: [watchlistId], references: [id], onDelete: Cascade)
+  content     Content   @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@id([watchlistId, contentId])
+}
+
+model WatchProgress {
+  id         String   @id @default(cuid())
+  userId     String
+  contentId  String
+  episodeKey String   @default("")
+  episodeId  String?
+  episode    Episode? @relation(fields:[episodeId],references:[id],onDelete:Restrict)
+  position   Int
+  duration   Int
+  completed  Boolean  @default(false)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content    Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentId, episodeKey])
+  @@index([userId, completed, updatedAt])
+}
+
+model WatchHistory {
+  id         String   @id @default(cuid())
+  userId     String
+  contentId  String
+  episodeKey String   @default("")
+  episodeId  String?
+  episode    Episode? @relation(fields:[episodeId],references:[id],onDelete:Restrict)
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content    Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, contentId, episodeKey])
+  @@index([userId, updatedAt])
+}
+
+model UserRating {
+  userId    String
+  contentId String
+  value     Int
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  content   Content  @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@id([userId, contentId])
+}
+
+model SubscriptionPlan {
+  id            String         @id @default(cuid())
+  slug          String         @unique
+  name          String
+  price         Int
+  currency      String         @default("BDT")
+  durationDays  Int
+  features      String[]       @default([])
+  active        Boolean        @default(false)
+  createdAt     DateTime       @default(now()) @db.Timestamptz(3)
+  updatedAt     DateTime       @updatedAt @db.Timestamptz(3)
+  subscriptions Subscription[]
+}
+
+model Subscription {
+  id                String             @id @default(cuid())
+  userId            String
+  planId            String
+  status            SubscriptionStatus @default(PENDING)
+  startsAt          DateTime? @db.Timestamptz(3)
+  expiresAt         DateTime? @db.Timestamptz(3)
+  autoRenew         Boolean            @default(false)
+  cancelAtPeriodEnd Boolean            @default(false)
+  cancelledAt       DateTime? @db.Timestamptz(3)
+  createdAt         DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime           @updatedAt @db.Timestamptz(3)
+  user              User               @relation(fields: [userId], references: [id], onDelete: Restrict)
+  plan              SubscriptionPlan   @relation(fields: [planId], references: [id], onDelete: Restrict)
+  payments          Payment[]
+
+  @@index([userId, status, expiresAt])
+}
+
+model Payment {
+  id                String               @id @default(cuid())
+  userId            String
+  subscriptionId    String
+  provider          String
+  providerReference String?              @unique
+  amount            Int
+  currency          String
+  status            PaymentStatus        @default(PENDING)
+  liveMode          Boolean              @default(false)
+  verifiedAt        DateTime? @db.Timestamptz(3)
+  createdAt         DateTime             @default(now()) @db.Timestamptz(3)
+  updatedAt         DateTime             @updatedAt @db.Timestamptz(3)
+  user              User                 @relation(fields: [userId], references: [id], onDelete: Restrict)
+  subscription      Subscription         @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  transactions      PaymentTransaction[]
+
+  @@index([userId, createdAt])
+}
+
+model PaymentTransaction {
+  id              String   @id @default(cuid())
+  paymentId       String
+  providerEventId String   @unique
+  kind            String
+  amount          Int
+  currency        String
+  createdAt       DateTime @default(now()) @db.Timestamptz(3)
+  payment         Payment  @relation(fields: [paymentId], references: [id], onDelete: Restrict)
+}
+
+model PaymentWebhookEvent {
+  id          String    @id @default(cuid())
+  provider    String
+  eventId     String
+  digest      String
+  processedAt DateTime? @db.Timestamptz(3)
+  createdAt   DateTime  @default(now()) @db.Timestamptz(3)
+
+  @@unique([provider, eventId])
+}
+
+model Coupon {
+  id          String             @id @default(cuid())
+  code        String             @unique
+  percent     Int
+  expiresAt   DateTime? @db.Timestamptz(3)
+  active      Boolean            @default(false)
+  usageLimit  Int                @default(1)
+  createdAt   DateTime           @default(now()) @db.Timestamptz(3)
+  updatedAt   DateTime           @updatedAt @db.Timestamptz(3)
+  redemptions CouponRedemption[]
+}
+
+model CouponRedemption {
+  couponId  String
+  userId    String
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  coupon    Coupon   @relation(fields: [couponId], references: [id], onDelete: Restrict)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  @@id([couponId, userId])
+}
+
+model HomepageSection {
+  id        String                @id @default(cuid())
+  slug      String                @unique
+  title     String
+  position  Int                   @default(0)
+  active    Boolean               @default(false)
+  createdAt DateTime              @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime              @updatedAt @db.Timestamptz(3)
+  items     HomepageSectionItem[]
+}
+
+model HomepageSectionItem {
+  sectionId String
+  contentId String
+  position  Int             @default(0)
+  section   HomepageSection @relation(fields: [sectionId], references: [id], onDelete: Cascade)
+  content   Content         @relation(fields: [contentId], references: [id], onDelete: Cascade)
+
+  @@id([sectionId, contentId])
+}
+
+model PlatformSetting {
+  key       String   @id
+  value     Json
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model Notification {
+  id        String    @id @default(cuid())
+  userId    String
+  title     String
+  body      String
+  readAt    DateTime? @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime  @updatedAt @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, readAt, createdAt])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  userId     String?
+  action     String
+  resourceId String?
+  metadata   Json?
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  user       User?    @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId, createdAt])
+}
+
+model MediaUpload {
+  id         String @id @default(cuid())
+  name       String
+  kind       String
+  mime       String
+  bytes      BigInt
+  multipartId String?
+  partSize    Int?
+  uploadedParts UploadPart[]
+  videoJobs   VideoJob[]
+  storageKey String @unique
+  provider   String
+  status     String @default("PENDING")
+  createdAt  DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt  DateTime @updatedAt @db.Timestamptz(3)
+}
+
+model UploadPart {
+  mediaId String
+  number Int
+  bytes Int
+  etag String
+  media MediaUpload @relation(fields:[mediaId],references:[id],onDelete:Cascade)
+  @@id([mediaId,number])
+}
+
+model VideoJob {
+  id String @id @default(cuid())
+  contentId String
+  episodeId String?
+  sourceMediaId String
+  status String @default("QUEUED")
+  progress Int @default(0)
+  duration Float?
+  resolutions Int[] @default([])
+  outputPrefix String?
+  errorCode String?
+  attempts Int @default(0)
+  leaseToken String?
+  leaseExpiresAt DateTime? @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  updatedAt DateTime @updatedAt @db.Timestamptz(3)
+  content Content @relation(fields:[contentId],references:[id],onDelete:Restrict)
+  episode Episode? @relation(fields:[episodeId],references:[id],onDelete:Restrict)
+  sourceMedia MediaUpload @relation(fields:[sourceMediaId],references:[id],onDelete:Restrict)
+  asset ContentAsset?
+  @@index([status,leaseExpiresAt,createdAt])
+}
+
+model PlaybackSession {
+  id String @id @default(uuid())
+  assetId String
+  userId String?
+  authSessionId String?
+  viewerHash String
+  expiresAt DateTime @db.Timestamptz(3)
+  createdAt DateTime @default(now()) @db.Timestamptz(3)
+  asset ContentAsset @relation(fields:[assetId],references:[id],onDelete:Cascade)
+  authSession Session? @relation(fields:[authSessionId],references:[id],onDelete:Cascade)
+  @@index([expiresAt])
+}
