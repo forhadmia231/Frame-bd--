@@ -82,7 +82,7 @@ Additive migration `20261108092322_admin_cms` (fifth migration): new MediaUpload
 Apply checked-in migrations and regenerate client:
 
 ```powershell
-Set-Location 'C:\Users\HP\Documents\ChatGPT\Movie website build\frame-bd'
+# Run from the cloned Frame BD repository.
 npm.cmd ci
 npm.cmd run db:start
 npm.cmd run db:migrate

@@ -45,3 +45,4 @@ next-env.d.ts
 # Local PostgreSQL cluster, mail inbox, credentials and generated ORM output
 /.local/
 /src/generated/prisma/
+/AGENTS.md
