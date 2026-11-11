@@ -1,6 +1,20 @@
 # Frame BD
 
-Existing cinematic Next.js frontend integrated with PostgreSQL, Prisma, Better Auth, real SMTP verification and a protected admin CMS. Read [STEP4_REPORT.md](STEP4_REPORT.md) for the dashboard, media workflow, permissions and operator setup; [STEP3_REPORT.md](STEP3_REPORT.md) records the backend foundation. Step 5 has not started.
+**Frame BD is a streaming platform for movies, series, anime, documentaries and short films.** Viewers can discover titles, keep a watchlist and pick up where they left off. A protected admin dashboard lets operators publish content, manage media and configure the platform.
+
+![Frame BD homepage](artifacts/desktop-home.jpg)
+
+## Project overview
+
+| Area | What you can do |
+| --- | --- |
+| **Discover** | Browse by genre, search the catalog and explore title details, seasons and episodes on desktop or mobile. |
+| **Watch** | Play authorized media with adaptive HLS, quality and speed controls, alternate audio and subtitles. |
+| **Your library** | Save titles in a browser watchlist as a guest, or sign in to keep your watchlist, history and viewing progress with your account. |
+| **Admin workspace** | Manage titles, episodes, artwork, subtitles and video processing. Configure bank, bKash and Nagad receiving details as a Super Admin. |
+| **Access** | Browse public content as a guest. The server checks account and subscription status before granting access to premium playback. |
+
+The application uses **Next.js App Router**, **TypeScript** and **Tailwind CSS** for the web experience, **PostgreSQL** and **Prisma** for data, and **Better Auth** with SMTP for account verification. A separate **FFmpeg** worker converts authorized uploads to HLS. **HLS.js** handles adaptive playback in supported browsers, and private **R2 or S3** storage holds deployed media.
 
 ## Windows setup
 
@@ -9,7 +23,7 @@ Requirements: Node.js 24 LTS, npm and PostgreSQL 17 binaries. This machine has P
 PowerShell, first terminal:
 
 ```powershell
-Set-Location 'C:\Users\HP\Documents\ChatGPT\Movie website build\frame-bd'
+# Run from the cloned Frame BD repository.
 npm.cmd ci
 npm.cmd run db:start
 npm.cmd run db:generate
@@ -24,7 +38,7 @@ npm.cmd run mail:dev
 Keep that terminal running for the local SMTP receiver. In a second terminal:
 
 ```powershell
-Set-Location 'C:\Users\HP\Documents\ChatGPT\Movie website build\frame-bd'
+# Run from the cloned Frame BD repository.
 npm.cmd run dev
 ```
 
@@ -62,6 +76,7 @@ npm.cmd run db:status
 npm.cmd run db:check
 npm.cmd run test:backend
 npm.cmd run test:admin
+npm.cmd run test:streaming
 npm.cmd run test:routes
 ```
 
@@ -71,8 +86,8 @@ npm.cmd run test:routes
 
 ## Integration boundaries
 
-Checkout is disabled and no real merchant credentials are configured. Stripe signature verification and transaction-safe event handling exist, but cannot fabricate an expected payment. bKash/Nagad/Rocket require approved provider implementations. The admin CMS, local image/subtitle uploads and private R2/S3 integration are implemented; remote storage requires real credentials/CORS. Licensed HLS playback and transcoding remain later phases. No copyrighted films or unauthorized media sources are included. Fictional metadata is temporary development data stored in PostgreSQL, not real film availability.
+Checkout is disabled. Stripe webhook verification is implemented, and bank, bKash and Nagad receiving details are administrative settings. Payment verification and premium activation require a verified provider event. For deployed video processing, configure a private R2/S3 bucket with CORS and run `npm run worker:stream` on a separate host with FFmpeg and FFprobe. The local demo catalog contains fictional titles, and the streaming sample uses an original generated clip.
 
 Open `/admin` with an existing verified Admin/Super Admin account. For first owner setup, use the explicit `admin:grant` command in the Step 4 report. Test accounts are removed; no default admin password exists. Admin writes are audited; payments and subscriptions cannot be manually marked successful. Run backend and admin integration suites sequentially because they temporarily modify scoped fixtures and platform settings in this isolated local environment.
 
-See [DEVELOPMENT_PROGRESS.md](DEVELOPMENT_PROGRESS.md), [STEP3_REPORT.md](STEP3_REPORT.md) and [architecture](../ARCHITECTURE.md).
+See [development progress](DEVELOPMENT_PROGRESS.md), [backend and authentication](STEP3_REPORT.md), [admin dashboard](STEP4_REPORT.md) and [streaming setup](STEP5_REPORT.md).
